@@ -24,7 +24,6 @@ export function AddStaffForm({ branches }: { branches: { id: string; name: strin
           required
           className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs"
         >
-          <option value="manager">Manager</option>
           <option value="waiter">Waiter</option>
           <option value="kitchen">Kitchen</option>
           <option value="cashier">Cashier</option>

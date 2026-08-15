@@ -1,12 +1,19 @@
+import QRCode from "qrcode";
+
 import { AddStaffForm } from "@/components/dashboard/add-staff-form";
+import { StaffLoginCard } from "@/components/dashboard/staff-login-card";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireCurrentRestaurant } from "@/lib/restaurant";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function StaffPage() {
   const restaurant = await requireCurrentRestaurant();
   const supabase = await createClient();
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const loginUrl = `${siteUrl}/staff?r=${restaurant.restaurantSlug}`;
+  const loginQr = await QRCode.toDataURL(loginUrl, { margin: 1, width: 220 });
 
   const [{ data: branches }, { data: staff }] = await Promise.all([
     supabase.from("branches").select("id, name").eq("restaurant_id", restaurant.restaurantId),
@@ -26,7 +33,25 @@ export default async function StaffPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle className="text-base">Staff sign-in</CardTitle>
+          <CardDescription>How your team gets into THALIQ on their own phones.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <StaffLoginCard
+            loginUrl={loginUrl}
+            qrDataUrl={loginQr}
+            restaurantCode={restaurant.restaurantSlug}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="text-base">Add staff</CardTitle>
+          <CardDescription>
+            Floor roles only. Managers need the full dashboard, which a PIN sign-in can&apos;t
+            reach — give them an owner/manager account instead.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {branches && branches.length > 0 ? (
