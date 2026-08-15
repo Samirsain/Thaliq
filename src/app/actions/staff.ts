@@ -23,8 +23,10 @@ export async function addStaff(
     return { error: "Name and a valid role are required." };
   }
 
-  if (!/^\d{4,6}$/.test(pin)) {
-    return { error: "PIN must be 4–6 digits." };
+  // Exactly 4 digits: the staff login keypad (PRD section 7's ● ● ● ●) is a
+  // fixed 4-dot pad, so a longer PIN would be impossible to type in.
+  if (!/^\d{4}$/.test(pin)) {
+    return { error: "PIN must be exactly 4 digits." };
   }
 
   const restaurant = await requireCurrentRestaurant();

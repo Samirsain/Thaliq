@@ -51,9 +51,10 @@ export function AddStaffForm({ branches }: { branches: { id: string; name: strin
           name="pin"
           type="password"
           inputMode="numeric"
-          placeholder="4–6 digits"
+          placeholder="4 digits"
+          pattern="\d{4}"
           minLength={4}
-          maxLength={6}
+          maxLength={4}
           required
           className="w-32"
         />
