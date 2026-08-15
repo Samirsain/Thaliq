@@ -1,3 +1,4 @@
+import { AutoRefresh } from "@/components/auto-refresh";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireCurrentRestaurant } from "@/lib/restaurant";
@@ -16,6 +17,7 @@ export default async function OrdersPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <AutoRefresh intervalMs={5000} />
       <div>
         <h1 className="text-2xl font-semibold">Orders</h1>
         <p className="text-muted-foreground">Live and recent orders across all branches.</p>

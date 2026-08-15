@@ -13,7 +13,15 @@ export default async function TableMenuPage(
 
   const table = await resolveTable(data.branch.id, tableId);
 
+  if (!table) notFound();
+
   return (
-    <CustomerMenu restaurant={data.restaurant} categories={data.categories} tableLabel={table?.label} />
+    <CustomerMenu
+      restaurant={data.restaurant}
+      categories={data.categories}
+      tableLabel={table.label}
+      branchId={data.branch.id}
+      tableId={table.id}
+    />
   );
 }

@@ -5,7 +5,9 @@ export async function getMenuData(restaurantSlug: string, branchSlug: string) {
 
   const { data: restaurant } = await supabase
     .from("restaurants")
-    .select("id, name, slug, logo_url, description, cuisine_type")
+    .select(
+      "id, name, slug, logo_url, description, cuisine_type, tax_percent, service_charge_percent",
+    )
     .eq("slug", restaurantSlug)
     .eq("status", "active")
     .maybeSingle();
@@ -25,7 +27,12 @@ export async function getMenuData(restaurantSlug: string, branchSlug: string) {
   const { data: categories } = await supabase
     .from("menu_categories")
     .select(
-      "id, name, sort_order, menu_items(id, name, description, image_url, base_price, is_veg, is_bestseller, is_available)",
+      `id, name, sort_order,
+       menu_items(
+         id, name, description, image_url, base_price, is_veg, is_bestseller, is_available,
+         menu_variants(id, name, price, is_default, sort_order),
+         menu_addons(id, name, price, sort_order)
+       )`,
     )
     .eq("restaurant_id", restaurant.id)
     .order("sort_order");

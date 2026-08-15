@@ -1,3 +1,4 @@
+import { AutoRefresh } from "@/components/auto-refresh";
 import { BillCard } from "@/components/staff/bill-card";
 import { Button } from "@/components/ui/button";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -23,6 +24,7 @@ export default async function CashierPage() {
 
   return (
     <div className="flex min-h-screen flex-col gap-6 bg-muted/20 p-6">
+      <AutoRefresh intervalMs={5000} />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Cashier</h1>

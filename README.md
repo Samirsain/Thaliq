@@ -31,6 +31,7 @@ applied in filename order:
    staff, subscriptions, …)
 3. `..._rls_policies.sql` — Row Level Security: restaurant-level isolation
 4. `..._seed_reference_data.sql` — subscription plans and menu templates
+5. `..._coupon_usage_function.sql` — atomic coupon-redemption counter used by `placeOrder`
 
 Apply them with the Supabase CLI (`supabase db push`) or by running each file
 against your project's Postgres connection in order.
@@ -61,7 +62,10 @@ Two separate authentication paths, matching the PRD:
   `src/app/actions/staff-ops.ts`.
 - **Customers** never authenticate. The QR menu pages
   (`/menu/[restaurant]/[branch]/[table]`) read public menu data through
-  anon-role RLS policies.
+  anon-role RLS policies; placing an order or requesting the waiter goes
+  through a server action using the service-role client (`src/app/actions/orders.ts`,
+  `src/app/actions/waiter-requests.ts`), since anon has no write access to
+  those tables by design.
 
 ## Route map
 
@@ -93,21 +97,45 @@ Two separate authentication paths, matching the PRD:
 
 /menu/[restaurant]/[branch]                general branch menu (entrance QR)
 /menu/[restaurant]/[branch]/[table]         table-scoped menu (table QR)
+/menu/[restaurant]/[branch]/order/[orderId] live order tracking (PRD §34)
 ```
 
 ## What's implemented vs. what's next
 
 This scaffold covers PRD **Phase 1 (Foundation)** in full, plus working
-slices of Phases 2–3: real auth, restaurant/branch/table/menu/staff CRUD,
-QR code generation, a functional (if simple) kitchen/waiter/cashier flow, and
-a read-only branded customer menu.
+slices of Phases 2–4: real auth, restaurant/branch/table/menu/staff CRUD, QR
+code generation, the full customer ordering loop (cart → coupon → order →
+live tracking), waiter-call requests, a functional kitchen/waiter/cashier
+flow (including bill creation when a customer requests the check), and
+near-real-time updates throughout.
+
+**Customer ordering loop** (`src/lib/cart-types.ts`,
+`src/components/menu/cart-provider.tsx`, `src/app/actions/orders.ts`): the
+cart is client-side (localStorage, scoped per restaurant+branch+table) purely
+for UX — every price is re-fetched from the database by ID and every coupon
+re-validated inside `placeOrder` before the order is written, so a tampered
+client request can't change what the restaurant gets paid. Placing an order
+creates or reuses the table's open `table_sessions` row, sets the table to
+`order_pending`, and redirects to a live tracking page.
+
+**Near-real-time, not websocket Realtime**: customers and PIN-authenticated
+staff never hold a Supabase Auth session, so a browser-side Supabase Realtime
+subscription would connect as `anon` — which correctly *can't* read
+orders/waiter_requests/bills under RLS (member-only policies). Rather than
+weaken that boundary, the kitchen/waiter/cashier pages, the order tracking
+page, and the owner dashboard poll via `router.refresh()` on a short interval
+(`src/components/auto-refresh.tsx`). The owner dashboard *does* have a real
+Supabase Auth session, so upgrading it to genuine `postgres_changes` Realtime
+is a natural, low-risk follow-up; doing the same for staff/customers would
+first need a real auth/token mechanism for them.
 
 Deliberately not built yet (see PRD §53–56 for the phased roadmap):
 
-- Customer-side cart and order placement (menu is currently read-only)
-- Realtime order push (Supabase Realtime channels) to kitchen/waiter/manager
+- True websocket Realtime (see above — currently short-interval polling)
 - Push notifications / sound alerts
-- Offer rule builder UI (offers table + RLS exist; no create/edit form)
+- Offer rule builder UI (offers table + RLS + coupon redemption logic exist;
+  no create/edit form for the owner)
+- Customer feedback form (schema exists; no UI)
 - Payment gateway integration, GST invoicing, printer integration
 - Inventory, loyalty, CRM, WhatsApp — explicitly out of MVP scope per PRD §54
 

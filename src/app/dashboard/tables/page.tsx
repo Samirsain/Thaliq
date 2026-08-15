@@ -1,3 +1,4 @@
+import { AutoRefresh } from "@/components/auto-refresh";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AddTableForm } from "@/components/dashboard/add-table-form";
@@ -32,6 +33,7 @@ export default async function TablesPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <AutoRefresh intervalMs={8000} />
       <div>
         <h1 className="text-2xl font-semibold">Tables</h1>
         <p className="text-muted-foreground">Manage tables across your branches.</p>

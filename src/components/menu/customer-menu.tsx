@@ -1,28 +1,31 @@
+"use client";
+
+import { useState } from "react";
+
+import { AddToCartDialog, type MenuItemForCart } from "@/components/menu/add-to-cart-dialog";
+import { CartBar } from "@/components/menu/cart-bar";
+import { WaiterRequestButton } from "@/components/menu/waiter-request-button";
 import { Badge } from "@/components/ui/badge";
 
-type MenuItem = {
-  id: string;
-  name: string;
-  description: string | null;
-  base_price: number;
-  is_veg: boolean;
-  is_bestseller: boolean;
-  is_available: boolean;
-};
-
-type Category = { id: string; name: string; menu_items: MenuItem[] };
+type Category = { id: string; name: string; menu_items: MenuItemForCart[] };
 
 export function CustomerMenu({
   restaurant,
   categories,
   tableLabel,
+  branchId,
+  tableId,
 }: {
   restaurant: { name: string; description: string | null; cuisine_type: string | null };
   categories: Category[];
   tableLabel?: string | null;
+  branchId: string;
+  tableId?: string;
 }) {
+  const [activeItem, setActiveItem] = useState<MenuItemForCart | null>(null);
+
   return (
-    <div className="mx-auto flex max-w-xl flex-col gap-6 p-4 pb-16">
+    <div className="mx-auto flex max-w-xl flex-col gap-6 p-4 pb-28">
       <div className="flex flex-col items-center gap-2 pt-6 text-center">
         <div className="flex size-16 items-center justify-center rounded-full bg-brand text-xl font-semibold text-brand-foreground">
           {restaurant.name.slice(0, 1)}
@@ -39,9 +42,12 @@ export function CustomerMenu({
           <h2 className="text-lg font-semibold">{category.name}</h2>
           <div className="flex flex-col gap-3">
             {category.menu_items.map((item) => (
-              <div
+              <button
                 key={item.id}
-                className="flex items-start justify-between gap-3 rounded-lg border p-3"
+                type="button"
+                disabled={!item.is_available}
+                onClick={() => setActiveItem(item)}
+                className="flex items-start justify-between gap-3 rounded-lg border p-3 text-left transition-colors enabled:hover:bg-accent disabled:opacity-60"
               >
                 <div className="flex flex-1 flex-col gap-1">
                   <div className="flex items-center gap-2">
@@ -57,7 +63,7 @@ export function CustomerMenu({
                   <p className="font-medium">₹{item.base_price}</p>
                 </div>
                 {!item.is_available ? <Badge variant="destructive">Sold out</Badge> : null}
-              </div>
+              </button>
             ))}
             {category.menu_items.length === 0 && (
               <p className="text-sm text-muted-foreground">No items in this category yet.</p>
@@ -69,6 +75,13 @@ export function CustomerMenu({
       {categories.length === 0 && (
         <p className="text-center text-sm text-muted-foreground">Menu coming soon.</p>
       )}
+
+      {activeItem ? (
+        <AddToCartDialog item={activeItem} open={!!activeItem} onOpenChange={(open) => !open && setActiveItem(null)} />
+      ) : null}
+
+      {tableId ? <WaiterRequestButton branchId={branchId} tableId={tableId} /> : null}
+      <CartBar />
     </div>
   );
 }
