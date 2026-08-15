@@ -5,7 +5,11 @@ import { revalidatePath } from "next/cache";
 import { requireCurrentRestaurant } from "@/lib/restaurant";
 import { createClient } from "@/lib/supabase/server";
 
-export type MenuActionState = { error: string | null };
+export type MenuActionState = {
+  error: string | null;
+  /** Bumped on each successful save so the form can reset client-only state. */
+  savedAt?: number;
+};
 
 export async function addMenuCategory(
   _prevState: MenuActionState,
@@ -35,6 +39,7 @@ export async function addMenuItem(
   const name = String(formData.get("name") ?? "").trim();
   const basePrice = Number(formData.get("basePrice"));
   const isVeg = formData.get("isVeg") === "on";
+  const imageUrl = String(formData.get("imageUrl") ?? "").trim() || null;
 
   if (!categoryId || !name || Number.isNaN(basePrice)) {
     return { error: "Category, name and price are required." };
@@ -49,12 +54,13 @@ export async function addMenuItem(
     name,
     base_price: basePrice,
     is_veg: isVeg,
+    image_url: imageUrl,
   });
 
   if (error) return { error: error.message };
 
   revalidatePath("/dashboard/menu");
-  return { error: null };
+  return { error: null, savedAt: Date.now() };
 }
 
 export async function toggleMenuItemAvailability(itemId: string, isAvailable: boolean) {

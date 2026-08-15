@@ -6,8 +6,22 @@ import { AddToCartDialog, type MenuItemForCart } from "@/components/menu/add-to-
 import { CartBar } from "@/components/menu/cart-bar";
 import { WaiterRequestButton } from "@/components/menu/waiter-request-button";
 import { Badge } from "@/components/ui/badge";
+import { templateStyle } from "@/lib/templates";
+import { cn } from "@/lib/utils";
 
 type Category = { id: string; name: string; menu_items: MenuItemForCart[] };
+
+export type MenuTheme = {
+  templateSlug: string | null;
+  primaryColor: string | null;
+  fontFamily: string | null;
+};
+
+const FONT_CLASS: Record<string, string> = {
+  sans: "font-sans",
+  serif: "font-serif",
+  mono: "font-mono",
+};
 
 export function CustomerMenu({
   restaurant,
@@ -15,22 +29,67 @@ export function CustomerMenu({
   tableLabel,
   branchId,
   tableId,
+  theme,
 }: {
-  restaurant: { name: string; description: string | null; cuisine_type: string | null };
+  restaurant: {
+    name: string;
+    description: string | null;
+    cuisine_type: string | null;
+    logo_url: string | null;
+    cover_image_url: string | null;
+  };
   categories: Category[];
   tableLabel?: string | null;
   branchId: string;
   tableId?: string;
+  theme?: MenuTheme;
 }) {
   const [activeItem, setActiveItem] = useState<MenuItemForCart | null>(null);
+  const style = templateStyle(theme?.templateSlug);
+
+  // The owner's brand colour overrides the --brand token for this subtree, so
+  // every element already styled with bg-brand/text-brand follows along.
+  const brandVars = theme?.primaryColor
+    ? ({
+        "--brand": theme.primaryColor,
+        "--color-brand": theme.primaryColor,
+      } as React.CSSProperties)
+    : undefined;
 
   return (
-    <div className="mx-auto flex max-w-xl flex-col gap-6 p-4 pb-28">
-      <div className="flex flex-col items-center gap-2 pt-6 text-center">
-        <div className="flex size-16 items-center justify-center rounded-full bg-brand text-xl font-semibold text-brand-foreground">
-          {restaurant.name.slice(0, 1)}
-        </div>
-        <h1 className="text-xl font-semibold">{restaurant.name}</h1>
+    <div
+      style={brandVars}
+      className={cn(
+        "mx-auto flex max-w-xl flex-col gap-6 pb-28",
+        style.page,
+        theme?.fontFamily ? FONT_CLASS[theme.fontFamily] : null,
+      )}
+    >
+      {restaurant.cover_image_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={restaurant.cover_image_url}
+          alt=""
+          className="h-36 w-full object-cover sm:rounded-b-xl"
+        />
+      ) : null}
+
+      <div
+        className={`flex flex-col items-center gap-2 px-4 text-center ${restaurant.cover_image_url ? "-mt-12" : "pt-6"}`}
+      >
+        {restaurant.logo_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={restaurant.logo_url}
+            alt={restaurant.name}
+            className="size-16 rounded-full border-2 border-background object-cover shadow-sm"
+          />
+        ) : (
+          <div className="flex size-16 items-center justify-center rounded-full border-2 border-background bg-brand text-xl font-semibold text-brand-foreground shadow-sm">
+            {restaurant.name.slice(0, 1)}
+          </div>
+        )}
+        <h1 className={style.title}>{restaurant.name}</h1>
         {restaurant.cuisine_type ? (
           <p className="text-sm text-muted-foreground">{restaurant.cuisine_type}</p>
         ) : null}
@@ -38,8 +97,8 @@ export function CustomerMenu({
       </div>
 
       {categories.map((category) => (
-        <section key={category.id} className="flex flex-col gap-3">
-          <h2 className="text-lg font-semibold">{category.name}</h2>
+        <section key={category.id} className="flex flex-col gap-3 px-4">
+          <h2 className={style.heading}>{category.name}</h2>
           <div className="flex flex-col gap-3">
             {category.menu_items.map((item) => (
               <button
@@ -47,7 +106,10 @@ export function CustomerMenu({
                 type="button"
                 disabled={!item.is_available}
                 onClick={() => setActiveItem(item)}
-                className="flex items-start justify-between gap-3 rounded-lg border p-3 text-left transition-colors enabled:hover:bg-accent disabled:opacity-60"
+                className={cn(
+                  "flex items-start justify-between gap-3 p-3 text-left transition-colors enabled:hover:bg-accent/60 disabled:opacity-60",
+                  style.card,
+                )}
               >
                 <div className="flex flex-1 flex-col gap-1">
                   <div className="flex items-center gap-2">
@@ -62,7 +124,27 @@ export function CustomerMenu({
                   ) : null}
                   <p className="font-medium">₹{item.base_price}</p>
                 </div>
-                {!item.is_available ? <Badge variant="destructive">Sold out</Badge> : null}
+
+                {item.image_url ? (
+                  <div className="relative shrink-0">
+                    {/* Already compressed at upload and served straight from
+                        Supabase Storage — no image-optimization pass needed. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={item.image_url}
+                      alt={item.name}
+                      loading="lazy"
+                      className={cn("size-20 border object-cover", style.image)}
+                    />
+                    {!item.is_available ? (
+                      <span className="absolute inset-0 flex items-center justify-center rounded-md bg-background/70 text-xs font-medium">
+                        Sold out
+                      </span>
+                    ) : null}
+                  </div>
+                ) : !item.is_available ? (
+                  <Badge variant="destructive">Sold out</Badge>
+                ) : null}
               </button>
             ))}
             {category.menu_items.length === 0 && (
@@ -73,7 +155,7 @@ export function CustomerMenu({
       ))}
 
       {categories.length === 0 && (
-        <p className="text-center text-sm text-muted-foreground">Menu coming soon.</p>
+        <p className="px-4 text-center text-sm text-muted-foreground">Menu coming soon.</p>
       )}
 
       {activeItem ? (

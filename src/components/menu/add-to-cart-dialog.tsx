@@ -22,6 +22,7 @@ export type MenuItemForCart = {
   id: string;
   name: string;
   description: string | null;
+  image_url: string | null;
   base_price: number;
   is_veg: boolean;
   is_bestseller: boolean;
@@ -76,6 +77,15 @@ export function AddToCartDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
+        {item.image_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={item.image_url}
+            alt={item.name}
+            className="-mx-6 -mt-6 h-44 w-[calc(100%+3rem)] object-cover"
+          />
+        ) : null}
+
         <DialogHeader>
           <DialogTitle>{item.name}</DialogTitle>
         </DialogHeader>

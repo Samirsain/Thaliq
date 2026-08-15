@@ -11,7 +11,7 @@ export default async function MenuPage() {
 
   const { data: categories } = await supabase
     .from("menu_categories")
-    .select("id, name, menu_items(id, name, base_price, is_veg, is_available)")
+    .select("id, name, menu_items(id, name, base_price, is_veg, is_available, image_url)")
     .eq("restaurant_id", restaurant.restaurantId)
     .order("sort_order");
 
@@ -38,7 +38,7 @@ export default async function MenuPage() {
           </CardHeader>
           <CardContent>
             {categories && categories.length > 0 ? (
-              <AddItemForm categories={categories} />
+              <AddItemForm categories={categories} restaurantId={restaurant.restaurantId} />
             ) : (
               <p className="text-sm text-muted-foreground">Create a category first.</p>
             )}
@@ -58,7 +58,17 @@ export default async function MenuPage() {
               )}
               {category.menu_items.map((item) => (
                 <div key={item.id} className="flex items-center justify-between border-b py-2 last:border-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
+                    {item.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={item.image_url}
+                        alt=""
+                        className="size-10 shrink-0 rounded-md border object-cover"
+                      />
+                    ) : (
+                      <div className="size-10 shrink-0 rounded-md border border-dashed" />
+                    )}
                     <span
                       className={`size-2.5 rounded-sm border ${item.is_veg ? "border-green-600 bg-green-600" : "border-red-600 bg-red-600"}`}
                     />

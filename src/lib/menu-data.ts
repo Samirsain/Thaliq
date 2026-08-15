@@ -6,7 +6,7 @@ export async function getMenuData(restaurantSlug: string, branchSlug: string) {
   const { data: restaurant } = await supabase
     .from("restaurants")
     .select(
-      "id, name, slug, logo_url, description, cuisine_type, tax_percent, service_charge_percent",
+      "id, name, slug, logo_url, cover_image_url, description, cuisine_type, tax_percent, service_charge_percent",
     )
     .eq("slug", restaurantSlug)
     .eq("status", "active")
@@ -24,6 +24,12 @@ export async function getMenuData(restaurantSlug: string, branchSlug: string) {
 
   if (!branch) return null;
 
+  const { data: theme } = await supabase
+    .from("restaurant_themes")
+    .select("primary_color, font_family, templates(slug)")
+    .eq("restaurant_id", restaurant.id)
+    .maybeSingle();
+
   const { data: categories } = await supabase
     .from("menu_categories")
     .select(
@@ -37,7 +43,19 @@ export async function getMenuData(restaurantSlug: string, branchSlug: string) {
     .eq("restaurant_id", restaurant.id)
     .order("sort_order");
 
-  return { restaurant, branch, categories: categories ?? [] };
+  const templateSlug =
+    (theme?.templates as unknown as { slug: string } | null)?.slug ?? null;
+
+  return {
+    restaurant,
+    branch,
+    categories: categories ?? [],
+    theme: {
+      templateSlug,
+      primaryColor: theme?.primary_color ?? null,
+      fontFamily: theme?.font_family ?? null,
+    },
+  };
 }
 
 export async function resolveTable(branchId: string, tableId: string) {

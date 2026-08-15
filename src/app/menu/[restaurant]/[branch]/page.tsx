@@ -10,6 +10,11 @@ export default async function BranchMenuPage(props: PageProps<"/menu/[restaurant
   if (!data) notFound();
 
   return (
-    <CustomerMenu restaurant={data.restaurant} categories={data.categories} branchId={data.branch.id} />
+    <CustomerMenu
+      restaurant={data.restaurant}
+      categories={data.categories}
+      branchId={data.branch.id}
+      theme={data.theme}
+    />
   );
 }

@@ -22,6 +22,7 @@ export default async function TableMenuPage(
       tableLabel={table.label}
       branchId={data.branch.id}
       tableId={table.id}
+      theme={data.theme}
     />
   );
 }

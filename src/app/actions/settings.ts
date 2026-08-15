@@ -16,6 +16,8 @@ export async function updateRestaurantProfile(
   const description = String(formData.get("description") ?? "").trim() || null;
   const taxPercent = Number(formData.get("taxPercent") ?? 0);
   const serviceChargePercent = Number(formData.get("serviceChargePercent") ?? 0);
+  const logoUrl = String(formData.get("logoUrl") ?? "").trim() || null;
+  const coverImageUrl = String(formData.get("coverImageUrl") ?? "").trim() || null;
 
   if (!name) {
     return { error: "Restaurant name is required.", success: false };
@@ -32,6 +34,8 @@ export async function updateRestaurantProfile(
       description,
       tax_percent: Number.isFinite(taxPercent) ? taxPercent : 0,
       service_charge_percent: Number.isFinite(serviceChargePercent) ? serviceChargePercent : 0,
+      logo_url: logoUrl,
+      cover_image_url: coverImageUrl,
     })
     .eq("id", restaurant.restaurantId);
 

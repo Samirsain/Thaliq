@@ -1,17 +1,48 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { addMenuItem } from "@/app/actions/menu";
 import { Button } from "@/components/ui/button";
+import { ImageUpload } from "@/components/ui/image-upload";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export function AddItemForm({ categories }: { categories: { id: string; name: string }[] }) {
+export function AddItemForm({
+  categories,
+  restaurantId,
+}: {
+  categories: { id: string; name: string }[];
+  restaurantId: string;
+}) {
   const [state, formAction, isPending] = useActionState(addMenuItem, { error: null });
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+
+  // Clear the picked image once the item has been saved, so the next item
+  // doesn't silently reuse the previous photo. Adjusting state during render
+  // (rather than in an effect) is React's recommended way to react to a
+  // changed prop/action result — it re-renders before committing, with no
+  // extra paint.
+  const [lastSavedAt, setLastSavedAt] = useState(state.savedAt);
+  if (state.savedAt !== lastSavedAt) {
+    setLastSavedAt(state.savedAt);
+    setImageUrl(null);
+  }
 
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-3">
+      <input type="hidden" name="imageUrl" value={imageUrl ?? ""} />
+      <div className="flex w-full flex-col gap-1.5">
+        <Label>Photo</Label>
+        <ImageUpload
+          bucket="menu-images"
+          restaurantId={restaurantId}
+          value={imageUrl}
+          onChange={setImageUrl}
+          prefix="item"
+          label="Add photo"
+        />
+      </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="categoryId">Category</Label>
         <select

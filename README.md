@@ -32,6 +32,7 @@ applied in filename order:
 3. `..._rls_policies.sql` — Row Level Security: restaurant-level isolation
 4. `..._seed_reference_data.sql` — subscription plans and menu templates
 5. `..._coupon_usage_function.sql` — atomic coupon-redemption counter used by `placeOrder`
+6. `..._storage_buckets.sql` — image buckets + storage RLS (per-restaurant folders)
 
 Apply them with the Supabase CLI (`supabase db push`) or by running each file
 against your project's Postgres connection in order.
@@ -78,6 +79,7 @@ Two separate authentication paths, matching the PRD:
 /dashboard/tables
 /dashboard/menu
 /dashboard/offers
+/dashboard/branding                        template, brand colour, font
 /dashboard/staff
 /dashboard/analytics
 /dashboard/qr
@@ -102,12 +104,12 @@ Two separate authentication paths, matching the PRD:
 
 ## What's implemented vs. what's next
 
-This scaffold covers PRD **Phase 1 (Foundation)** in full, plus working
-slices of Phases 2–4: real auth, restaurant/branch/table/menu/staff CRUD, QR
-code generation, the full customer ordering loop (cart → coupon → order →
-live tracking), waiter-call requests, a functional kitchen/waiter/cashier
-flow (including bill creation when a customer requests the check), and
-near-real-time updates throughout.
+Covers PRD **Phase 1 (Foundation)** in full, plus working slices of Phases
+2–4: real auth, restaurant/branch/table/menu/staff CRUD, QR code generation,
+image uploads, menu templates and branding, the full customer ordering loop
+(cart → coupon → order → live tracking), waiter-call requests, a functional
+kitchen/waiter/cashier flow (including bill creation when a customer requests
+the check), and near-real-time updates throughout.
 
 **Customer ordering loop** (`src/lib/cart-types.ts`,
 `src/components/menu/cart-provider.tsx`, `src/app/actions/orders.ts`): the
@@ -117,6 +119,25 @@ re-validated inside `placeOrder` before the order is written, so a tampered
 client request can't change what the restaurant gets paid. Placing an order
 creates or reuses the table's open `table_sessions` row, sets the table to
 `order_pending`, and redirects to a live tracking page.
+
+**Images** (`src/lib/compress-image.ts`, `src/components/ui/image-upload.tsx`):
+menu photos and restaurant logo/cover upload to Supabase Storage. Images are
+downscaled to 900px and re-encoded to WebP **in the browser before upload** —
+a 4 MB phone photo lands at ~150 KB, which keeps a full menu inside Supabase's
+1 GB free tier and keeps served bytes small. They're served straight from
+Storage rather than through `next/image`, since they're already sized and
+optimising them again would burn Vercel transformation quota for no gain.
+Storage RLS keys off the first path segment (`<restaurant_id>/…`), so one
+restaurant cannot overwrite another's images — verified against a real
+Postgres instance, including malformed paths.
+
+**Templates & branding** (`src/lib/templates.ts`, `/dashboard/branding`): 11
+seeded templates (3 free, 8 premium) change only presentation — layout,
+typography, image shape — never menu data, per PRD §32. The owner's brand
+colour is applied by overriding the `--brand` CSS custom property for the menu
+subtree, so existing `bg-brand`/`text-brand` utilities follow automatically.
+Premium templates are gated: locked on Starter, open during trial (PRD §48
+gives trials Business-level features).
 
 **Near-real-time, not websocket Realtime**: customers and PIN-authenticated
 staff never hold a Supabase Auth session, so a browser-side Supabase Realtime
@@ -136,8 +157,22 @@ Deliberately not built yet (see PRD §53–56 for the phased roadmap):
 - Offer rule builder UI (offers table + RLS + coupon redemption logic exist;
   no create/edit form for the owner)
 - Customer feedback form (schema exists; no UI)
+- Editing/deleting existing menu items (create works; no edit form yet)
 - Payment gateway integration, GST invoicing, printer integration
 - Inventory, loyalty, CRM, WhatsApp — explicitly out of MVP scope per PRD §54
+
+## Deployment notes
+
+- **QR codes embed `NEXT_PUBLIC_SITE_URL`.** Menu, prices, offers and template
+  can all change freely without reprinting — the QR only carries a URL — but
+  changing the *domain* invalidates every printed code. Settle the final
+  domain before printing table stickers. (A `qr_codes` table with a
+  `target_url` column is already in the schema if an indirection layer is
+  wanted later.)
+- **Vercel's Hobby plan is non-commercial only** per their ToS; a revenue-
+  generating deployment needs Pro or self-hosting.
+- **Supabase free projects pause after ~7 days of inactivity** — fine for a
+  live restaurant, worth knowing during intermittent testing.
 
 ## Security notes
 

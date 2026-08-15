@@ -11,6 +11,7 @@ import {
   Users,
   BarChart3,
   QrCode,
+  Palette,
   Settings,
 } from "lucide-react";
 
@@ -22,6 +23,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/tables", label: "Tables", icon: Table2 },
   { href: "/dashboard/menu", label: "Menu", icon: UtensilsCrossed },
   { href: "/dashboard/offers", label: "Offers", icon: Tag },
+  { href: "/dashboard/branding", label: "Branding", icon: Palette },
   { href: "/dashboard/staff", label: "Staff", icon: Users },
   { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/dashboard/qr", label: "QR Codes", icon: QrCode },
