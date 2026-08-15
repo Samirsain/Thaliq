@@ -78,11 +78,14 @@ export function AddToCartDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         {item.image_url ? (
+          // A plain block with its own rounding — an earlier negative-margin
+          // bleed pushed the image past the dialog's rounded corners and its
+          // overflow-y-auto clip, which read as the photo being cut off.
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={item.image_url}
             alt={item.name}
-            className="-mx-6 -mt-6 h-44 w-[calc(100%+3rem)] object-cover"
+            className="aspect-[4/3] w-full rounded-lg border object-cover"
           />
         ) : null}
 

@@ -10,7 +10,7 @@ export default async function SettingsPage() {
   const { data } = await supabase
     .from("restaurants")
     .select(
-      "name, phone, description, tax_percent, service_charge_percent, logo_url, cover_image_url",
+      "name, phone, description, tax_percent, service_charge_percent, logo_url, cover_image_url, upi_id, upi_display_name",
     )
     .eq("id", restaurant.restaurantId)
     .single();

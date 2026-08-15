@@ -107,20 +107,27 @@ export function CustomerMenu({
                 disabled={!item.is_available}
                 onClick={() => setActiveItem(item)}
                 className={cn(
-                  "flex items-start justify-between gap-3 p-3 text-left transition-colors enabled:hover:bg-accent/60 disabled:opacity-60",
+                  "flex w-full items-start justify-between gap-3 p-3 text-left transition-colors enabled:hover:bg-accent/60 disabled:opacity-60",
                   style.card,
                 )}
               >
-                <div className="flex flex-1 flex-col gap-1">
+                {/* min-w-0 lets the text column actually shrink; without it a
+                    long name or description forces the row wider than the
+                    screen and the thumbnail gets pushed off the edge. */}
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <div className="flex items-center gap-2">
                     <span
                       className={`size-2.5 shrink-0 rounded-sm border ${item.is_veg ? "border-green-600 bg-green-600" : "border-red-600 bg-red-600"}`}
                     />
-                    <p className="font-medium">{item.name}</p>
-                    {item.is_bestseller ? <Badge variant="outline">Bestseller</Badge> : null}
+                    <p className="min-w-0 truncate font-medium">{item.name}</p>
+                    {item.is_bestseller ? (
+                      <Badge variant="outline" className="shrink-0">
+                        Bestseller
+                      </Badge>
+                    ) : null}
                   </div>
                   {item.description ? (
-                    <p className="text-sm text-muted-foreground">{item.description}</p>
+                    <p className="line-clamp-2 text-sm text-muted-foreground">{item.description}</p>
                   ) : null}
                   <p className="font-medium">₹{item.base_price}</p>
                 </div>
@@ -134,16 +141,23 @@ export function CustomerMenu({
                       src={item.image_url}
                       alt={item.name}
                       loading="lazy"
-                      className={cn("size-20 border object-cover", style.image)}
+                      className={cn("size-16 border object-cover sm:size-20", style.image)}
                     />
                     {!item.is_available ? (
-                      <span className="absolute inset-0 flex items-center justify-center rounded-md bg-background/70 text-xs font-medium">
+                      <span
+                        className={cn(
+                          "absolute inset-0 flex items-center justify-center bg-background/75 text-xs font-medium",
+                          style.image,
+                        )}
+                      >
                         Sold out
                       </span>
                     ) : null}
                   </div>
                 ) : !item.is_available ? (
-                  <Badge variant="destructive">Sold out</Badge>
+                  <Badge variant="destructive" className="shrink-0">
+                    Sold out
+                  </Badge>
                 ) : null}
               </button>
             ))}

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireCurrentRestaurant } from "@/lib/restaurant";
 import { createClient } from "@/lib/supabase/server";
+import { isValidUpiId } from "@/lib/upi";
 
 export type SettingsActionState = { error: string | null; success: boolean };
 
@@ -18,6 +19,15 @@ export async function updateRestaurantProfile(
   const serviceChargePercent = Number(formData.get("serviceChargePercent") ?? 0);
   const logoUrl = String(formData.get("logoUrl") ?? "").trim() || null;
   const coverImageUrl = String(formData.get("coverImageUrl") ?? "").trim() || null;
+  const upiId = String(formData.get("upiId") ?? "").trim() || null;
+  const upiDisplayName = String(formData.get("upiDisplayName") ?? "").trim() || null;
+
+  if (upiId && !isValidUpiId(upiId)) {
+    return {
+      error: "UPI ID should look like yourname@bank (e.g. thecoffeehouse@okhdfcbank).",
+      success: false,
+    };
+  }
 
   if (!name) {
     return { error: "Restaurant name is required.", success: false };
@@ -36,6 +46,8 @@ export async function updateRestaurantProfile(
       service_charge_percent: Number.isFinite(serviceChargePercent) ? serviceChargePercent : 0,
       logo_url: logoUrl,
       cover_image_url: coverImageUrl,
+      upi_id: upiId,
+      upi_display_name: upiDisplayName,
     })
     .eq("id", restaurant.restaurantId);
 

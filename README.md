@@ -33,6 +33,7 @@ applied in filename order:
 4. `..._seed_reference_data.sql` — subscription plans and menu templates
 5. `..._coupon_usage_function.sql` — atomic coupon-redemption counter used by `placeOrder`
 6. `..._storage_buckets.sql` — image buckets + storage RLS (per-restaurant folders)
+7. `..._upi_payment.sql` — UPI collection details on `restaurants`
 
 Apply them with the Supabase CLI (`supabase db push`) or by running each file
 against your project's Postgres connection in order.
@@ -139,6 +140,19 @@ subtree, so existing `bg-brand`/`text-brand` utilities follow automatically.
 Premium templates are gated: locked on Starter, open during trial (PRD §48
 gives trials Business-level features).
 
+**Order lifecycle** is closed end to end: kitchen drives pending → accepted →
+preparing → ready, the waiter's "Ready to serve" queue takes ready → served,
+and the cashier recording payment completes every open order on the table
+session and frees the table. Each transition writes to `order_status_history`.
+
+**Payment** (PRD §35's MVP scope — cash/UPI/card, manually confirmed): setting
+a UPI ID in Settings lets the cashier show a `upi://pay` QR with the bill
+amount pre-filled. The customer's UPI app pays the restaurant directly, so
+there is no gateway, no merchant onboarding and no per-transaction fee; the
+cashier still confirms receipt by hand, exactly like cash. The URI is
+percent-encoded rather than built with `URLSearchParams`, whose `+` for spaces
+some UPI apps render literally in the payee name.
+
 **Near-real-time, not websocket Realtime**: customers and PIN-authenticated
 staff never hold a Supabase Auth session, so a browser-side Supabase Realtime
 subscription would connect as `anon` — which correctly *can't* read
@@ -158,7 +172,9 @@ Deliberately not built yet (see PRD §53–56 for the phased roadmap):
   no create/edit form for the owner)
 - Customer feedback form (schema exists; no UI)
 - Editing/deleting existing menu items (create works; no edit form yet)
-- Payment gateway integration, GST invoicing, printer integration
+- Online payment gateway (UPI QR covers in-person payment; there's no
+  automatic reconciliation — the cashier confirms receipt manually)
+- GST invoicing, printer integration
 - Inventory, loyalty, CRM, WhatsApp — explicitly out of MVP scope per PRD §54
 
 ## Deployment notes
