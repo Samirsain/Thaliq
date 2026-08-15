@@ -10,7 +10,26 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export function SignupForm() {
-  const [state, formAction, isPending] = useActionState(signUpOwner, { error: null });
+  const [state, formAction, isPending] = useActionState(signUpOwner, {
+    error: null,
+    notice: null,
+  });
+
+  if (state.notice) {
+    return (
+      <Card className="w-full max-w-sm">
+        <CardHeader>
+          <CardTitle>Confirm your email</CardTitle>
+          <CardDescription>{state.notice}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link href="/login" className="text-sm underline underline-offset-4">
+            Go to sign in
+          </Link>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="w-full max-w-sm">

@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 
-export type AuthActionState = { error: string | null };
+export type AuthActionState = { error: string | null; notice?: string | null };
 
 export async function signUpOwner(
   _prevState: AuthActionState,
@@ -15,7 +15,7 @@ export async function signUpOwner(
   const fullName = String(formData.get("fullName") ?? "");
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: { data: { full_name: fullName } },
@@ -23,6 +23,17 @@ export async function signUpOwner(
 
   if (error) {
     return { error: error.message };
+  }
+
+  // With "Confirm email" enabled (the Supabase default), signUp creates the
+  // user but returns no session until the emailed link is clicked. Redirecting
+  // to /onboarding here would bounce straight back to /login and look like the
+  // signup silently failed, so say what actually happened instead.
+  if (!data.session) {
+    return {
+      error: null,
+      notice: `Account created. Check ${email} for a confirmation link, then sign in.`,
+    };
   }
 
   redirect("/onboarding");
