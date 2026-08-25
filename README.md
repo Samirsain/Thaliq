@@ -2,9 +2,38 @@
 
 > One QR. Your entire restaurant connected.
 
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)](https://www.typescriptlang.org)
+[![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%7C%20Auth%20%7C%20Storage-3ECF8E?logo=supabase)](https://supabase.com)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-38B2AC?logo=tailwind-css)](https://tailwindcss.com)
+
 THALIQ is a QR-first restaurant operating system: digital menu, ordering, live
 kitchen display, staff notifications, and analytics in a single SaaS. Full
 product spec: [`docs/PRD.md`](docs/PRD.md).
+
+## Features
+
+- 📱 **QR-first digital menu** — no app install, scan and order
+- 🧑‍🍳 **Live kitchen display** — pending → accepted → preparing → ready
+- 🔔 **Waiter call & bill requests** from the table, in real time-ish
+- 🧾 **Cashier flow** — bill creation and UPI QR payment collection
+- 🎨 **Templates & branding** — 11 menu templates, brand colour, custom fonts
+- 👥 **Role-based staff access** — waiter / kitchen / cashier PIN login
+- 🏷️ **Coupons & offers**, seeded subscription plans
+- 🛡️ **Multi-tenant by design** — Postgres Row Level Security isolates every restaurant's data
+- 📊 **Owner dashboard** — orders, tables, menu, staff, analytics, QR codes
+- 🛠️ **Platform admin** — manage restaurants, users, subscriptions, payments
+
+## Table of contents
+
+- [Stack](#stack)
+- [Getting started](#getting-started)
+- [Database](#database)
+- [How auth works](#how-auth-works)
+- [Route map](#route-map)
+- [What's implemented vs. what's next](#whats-implemented-vs-whats-next)
+- [Deployment notes](#deployment-notes)
+- [Security notes](#security-notes)
 
 ## Stack
 
