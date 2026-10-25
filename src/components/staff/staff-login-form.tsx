@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
-import { ChefHat, Delete, HandPlatter, Loader2, Wallet } from "lucide-react";
+import { Delete, Loader2 } from "lucide-react";
 
 import { lookupRestaurant, staffLogin } from "@/app/actions/staff-auth";
 import { Button } from "@/components/ui/button";
@@ -10,38 +10,29 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
-const ROLES = [
-  { value: "waiter", label: "Waiter", icon: HandPlatter },
-  { value: "kitchen", label: "Kitchen", icon: ChefHat },
-  { value: "cashier", label: "Cashier", icon: Wallet },
-];
-
 const PIN_LENGTH = 4;
 const REMEMBERED_KEY = "thaliq_staff_restaurant";
 
-type Restaurant = { slug: string; name: string };
+type Restaurant = {
+  slug: string;
+  name: string;
+  staff: { id: string; name: string }[];
+};
 
 export function StaffLoginForm({ defaultRestaurantSlug }: { defaultRestaurantSlug?: string }) {
   const [state, formAction, isPending] = useActionState(staffLogin, { error: null });
 
-  // Step 1 state: which restaurant this device belongs to. Once set it is
-  // remembered, so day-to-day sign-in is just role + PIN — staff should never
-  // have to type a restaurant code twice on the same device.
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [code, setCode] = useState(defaultRestaurantSlug ?? "");
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [looking, startLookup] = useTransition();
 
-  // Step 2 state
-  const [role, setRole] = useState<string | null>(null);
+  const [selectedStaff, setSelectedStaff] = useState<string | null>(null);
   const [pin, setPin] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
-    // localStorage doesn't exist during SSR, so the remembered restaurant can
-    // only be read after mount — the one-time sync-from-external-system case
-    // the lint rule otherwise flags.
     const stored = window.localStorage.getItem(REMEMBERED_KEY);
     if (stored) {
       try {
@@ -54,7 +45,6 @@ export function StaffLoginForm({ defaultRestaurantSlug }: { defaultRestaurantSlu
     setHydrated(true);
   }, []);
 
-  // A ?r=<slug> link (the QR the owner prints for staff) resolves itself.
   useEffect(() => {
     if (!hydrated || restaurant || !defaultRestaurantSlug) return;
     startLookup(async () => {
@@ -66,12 +56,10 @@ export function StaffLoginForm({ defaultRestaurantSlug }: { defaultRestaurantSlu
     });
   }, [hydrated, restaurant, defaultRestaurantSlug]);
 
-  // Submit as soon as the 4th digit lands — no extra button press mid-service.
   useEffect(() => {
-    if (pin.length === PIN_LENGTH && role) formRef.current?.requestSubmit();
-  }, [pin, role]);
+    if (pin.length === PIN_LENGTH && selectedStaff) formRef.current?.requestSubmit();
+  }, [pin, selectedStaff]);
 
-  // Wrong PIN: clear the pad so the next attempt starts clean.
   const [lastError, setLastError] = useState(state.error);
   if (state.error !== lastError) {
     setLastError(state.error);
@@ -94,7 +82,7 @@ export function StaffLoginForm({ defaultRestaurantSlug }: { defaultRestaurantSlu
   function forgetRestaurant() {
     window.localStorage.removeItem(REMEMBERED_KEY);
     setRestaurant(null);
-    setRole(null);
+    setSelectedStaff(null);
     setPin("");
     setCode("");
   }
@@ -147,42 +135,49 @@ export function StaffLoginForm({ defaultRestaurantSlug }: { defaultRestaurantSlu
     );
   }
 
-  // ---- Step 2: role + PIN (the everyday path) ----
+  // ---- Step 2: select staff member + enter PIN ----
   return (
     <Card className="w-full max-w-sm">
       <CardHeader>
         <CardTitle>{restaurant.name}</CardTitle>
-        <CardDescription>Choose your role and enter your PIN.</CardDescription>
+        <CardDescription>Select your name and enter your PIN.</CardDescription>
       </CardHeader>
       <CardContent>
         <form ref={formRef} action={formAction} className="flex flex-col gap-5">
           <input type="hidden" name="restaurantSlug" value={restaurant.slug} />
-          <input type="hidden" name="role" value={role ?? ""} />
+          <input type="hidden" name="staffId" value={selectedStaff ?? ""} />
           <input type="hidden" name="pin" value={pin} />
 
-          <div className="grid grid-cols-3 gap-2">
-            {ROLES.map(({ value, label, icon: Icon }) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => {
-                  setRole(value);
-                  setPin("");
-                }}
-                className={cn(
-                  "flex flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-sm font-medium transition-colors",
-                  role === value
-                    ? "border-brand bg-brand text-brand-foreground"
-                    : "hover:bg-accent",
-                )}
-              >
-                <Icon className="size-5" />
-                {label}
-              </button>
-            ))}
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-medium">Select Staff Member:</p>
+            <div className="grid grid-cols-2 gap-2">
+              {restaurant.staff.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedStaff(s.id);
+                    setPin("");
+                  }}
+                  className={cn(
+                    "rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors",
+                    selectedStaff === s.id
+                      ? "border-brand bg-brand text-brand-foreground"
+                      : "hover:bg-accent",
+                  )}
+                >
+                  {s.name}
+                </button>
+              ))}
+            </div>
+            {restaurant.staff.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                No staff members set up yet. Ask your manager to add you.
+              </p>
+            )}
           </div>
 
-          {role ? (
+          {selectedStaff ? (
             <div className="flex flex-col items-center gap-4">
               <div className="flex gap-3">
                 {Array.from({ length: PIN_LENGTH }).map((_, i) => (
@@ -239,7 +234,7 @@ export function StaffLoginForm({ defaultRestaurantSlug }: { defaultRestaurantSlu
             </div>
           ) : (
             <p className="text-center text-sm text-muted-foreground">
-              Tap your role above to continue.
+              Tap your name above to continue.
             </p>
           )}
 

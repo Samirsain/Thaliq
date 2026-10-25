@@ -42,11 +42,16 @@ async function raiseBillForTable(
   tableId: string,
   restaurantId: string,
 ) {
+  // Match both "open" and "bill_requested" sessions. Previously this only
+  // matched "open", so a customer who requested the bill, placed another
+  // order (joining the "bill_requested" session), and then requested the
+  // bill again would get a stale total — the session lookup would fail
+  // and the bill would never be updated with the new order's amount.
   const { data: session } = await admin
     .from("table_sessions")
     .select("id")
     .eq("table_id", tableId)
-    .eq("status", "open")
+    .in("status", ["open", "bill_requested"])
     .maybeSingle();
 
   if (!session) return;

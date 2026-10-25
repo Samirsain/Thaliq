@@ -9,19 +9,27 @@ import { verifyPin } from "@/lib/staff-pin";
 
 export type StaffLoginState = { error: string | null };
 
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_MINUTES = 5;
+
 const ROLE_HOME: Record<string, string> = {
   waiter: "/staff/waiter",
   kitchen: "/staff/kitchen",
   cashier: "/staff/cashier",
+  staff: "/staff/orders",
 };
 
 /**
- * Resolves a restaurant code to its display name, so the sign-in screen can
- * confirm "The Coffee House" before anyone starts tapping a PIN.
+ * Resolves a restaurant code to its display name and active staff list, so
+ * the sign-in screen can show "The Coffee House" and a list of staff names
+ * before anyone taps a PIN.
  */
 export async function lookupRestaurant(
   code: string,
-): Promise<{ slug: string; name: string } | { error: string }> {
+): Promise<
+  | { slug: string; name: string; staff: { id: string; name: string }[] }
+  | { error: string }
+> {
   const slug = code.trim().toLowerCase();
   if (!slug) return { error: "Enter your restaurant code." };
 
@@ -36,7 +44,14 @@ export async function lookupRestaurant(
     return { error: "No restaurant found with that code. Ask your manager to check it." };
   }
 
-  return { slug: restaurant.slug, name: restaurant.name };
+  const { data: staff } = await admin
+    .from("staff")
+    .select("id, name")
+    .eq("restaurant_id", restaurant.id)
+    .eq("is_active", true)
+    .order("name");
+
+  return { slug: restaurant.slug, name: restaurant.name, staff: staff ?? [] };
 }
 
 export async function staffLogin(
@@ -44,11 +59,11 @@ export async function staffLogin(
   formData: FormData,
 ): Promise<StaffLoginState> {
   const restaurantSlug = String(formData.get("restaurantSlug") ?? "").trim().toLowerCase();
-  const role = String(formData.get("role") ?? "");
+  const staffId = String(formData.get("staffId") ?? "");
   const pin = String(formData.get("pin") ?? "");
 
   if (!restaurantSlug) return { error: "Enter your restaurant code." };
-  if (!ROLE_HOME[role]) return { error: "Choose your role." };
+  if (!staffId) return { error: "Select your name." };
   if (!/^\d{4}$/.test(pin)) return { error: "Enter your 4-digit PIN." };
 
   const admin = createAdminClient();
@@ -64,37 +79,86 @@ export async function staffLogin(
     return { error: "No restaurant found with that code. Ask your manager to check it." };
   }
 
-  const { data: candidates } = await admin
+  const { data: staff } = await admin
     .from("staff")
-    .select("id, name, branch_id, pin_hash")
+    .select(
+      "id, name, branch_id, role, pin_hash, is_active, failed_attempts, locked_until, session_version",
+    )
+    .eq("id", staffId)
     .eq("restaurant_id", restaurant.id)
-    .eq("role", role)
-    .eq("is_active", true);
+    .maybeSingle();
 
-  if (!candidates || candidates.length === 0) {
-    return { error: `No ${role} accounts set up yet. Ask your manager to add you.` };
+  if (!staff || !staff.is_active) {
+    return { error: "That staff member doesn't exist. Ask your manager to check." };
   }
 
-  const match = candidates.find((candidate) => verifyPin(pin, candidate.pin_hash));
+  // Check lockout
+  if (staff.locked_until && new Date(staff.locked_until) > new Date()) {
+    const remaining = Math.ceil(
+      (new Date(staff.locked_until).getTime() - Date.now()) / 60000,
+    );
+    return {
+      error: `Too many attempts. Try again in ${remaining} minute${remaining !== 1 ? "s" : ""}.`,
+    };
+  }
 
-  if (!match) {
-    return { error: "That PIN doesn't match. Try again or ask your manager." };
+  if (!verifyPin(pin, staff.pin_hash)) {
+    const newAttempts = staff.failed_attempts + 1;
+    const shouldLock = newAttempts >= MAX_ATTEMPTS;
+
+    await admin
+      .from("staff")
+      .update({
+        failed_attempts: newAttempts,
+        locked_until: shouldLock
+          ? new Date(Date.now() + LOCKOUT_MINUTES * 60000).toISOString()
+          : null,
+      })
+      .eq("id", staffId);
+
+    if (shouldLock) {
+      return { error: `Too many attempts. Account locked for ${LOCKOUT_MINUTES} minutes.` };
+    }
+
+    const remaining = MAX_ATTEMPTS - newAttempts;
+    return {
+      error: `That PIN doesn't match. ${remaining} attempt${remaining !== 1 ? "s" : ""} remaining.`,
+    };
+  }
+
+  // Success: reset failed attempts
+  await admin
+    .from("staff")
+    .update({ failed_attempts: 0, locked_until: null })
+    .eq("id", staffId);
+
+  let sessionToken: string;
+  try {
+    sessionToken = signStaffSession({
+      staffId: staff.id,
+      restaurantId: restaurant.id,
+      branchId: staff.branch_id,
+      role: staff.role as "waiter" | "kitchen" | "cashier" | "staff",
+      name: staff.name,
+      sessionVersion: staff.session_version,
+    });
+  } catch {
+    return {
+      error:
+        "Staff sign-in isn't available right now. Please ask your manager to contact support.",
+    };
   }
 
   const cookieStore = await cookies();
-  cookieStore.set(
-    STAFF_SESSION_COOKIE,
-    signStaffSession({
-      staffId: match.id,
-      restaurantId: restaurant.id,
-      branchId: match.branch_id,
-      role: role as "waiter" | "kitchen" | "cashier",
-      name: match.name,
-    }),
-    { httpOnly: true, sameSite: "lax", secure: true, path: "/", maxAge: 60 * 60 * 12 },
-  );
+  cookieStore.set(STAFF_SESSION_COOKIE, sessionToken, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: true,
+    path: "/",
+    maxAge: 60 * 60 * 12,
+  });
 
-  redirect(ROLE_HOME[role]);
+  redirect(ROLE_HOME[staff.role] ?? "/staff/orders");
 }
 
 export async function staffLogout() {

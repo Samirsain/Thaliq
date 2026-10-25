@@ -27,7 +27,20 @@ export async function advanceOrderStatus(orderId: string) {
   const nextStatus = KITCHEN_NEXT_STATUS[order.status];
   if (!nextStatus) return;
 
-  await admin.from("orders").update({ status: nextStatus }).eq("id", orderId);
+  // Guard against concurrent clicks: only advance if the status hasn't
+  // changed since we read it. Without this, two staff members clicking at
+  // the same time could regress the status (e.g. one reads "accepted",
+  // the other reads "preparing", and the late writer overwrites "ready"
+  // back to "preparing").
+  const { data: updated } = await admin
+    .from("orders")
+    .update({ status: nextStatus })
+    .eq("id", orderId)
+    .eq("status", order.status)
+    .select("id");
+
+  if (!updated || updated.length === 0) return;
+
   await admin.from("order_status_history").insert({
     order_id: orderId,
     status: nextStatus,
@@ -88,11 +101,19 @@ export async function resolveWaiterRequest(requestId: string) {
   const session = await requireStaffSession("waiter");
   const admin = createAdminClient();
 
-  await admin
+  // Only scope by branch_id when the staff member has one. Owners/managers
+  // (branchId = null) would otherwise get .eq("branch_id", "") which
+  // matches no UUID, making every resolve silently fail.
+  let query = admin
     .from("waiter_requests")
     .update({ resolved_at: new Date().toISOString(), resolved_by_staff_id: session.staffId })
-    .eq("id", requestId)
-    .eq("branch_id", session.branchId ?? "");
+    .eq("id", requestId);
+
+  if (session.branchId) {
+    query = query.eq("branch_id", session.branchId);
+  }
+
+  await query;
 
   revalidatePath("/staff/waiter");
 }

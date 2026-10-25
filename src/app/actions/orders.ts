@@ -167,7 +167,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
 
     if (!offer || !offer.is_active) return { error: "This coupon's offer is no longer active." };
     if (offer.min_order_value && subtotal < offer.min_order_value) {
-      return { error: `Minimum order value for this coupon is ₹${offer.min_order_value}.` };
+      return { error: `Minimum order value for this coupon is \₹${offer.min_order_value}.` };
     }
 
     if (offer.type === "percentage" && offer.percentage_value) {
@@ -202,14 +202,18 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
 
   let tableSessionId: string | null = null;
   if (tableId) {
-    const { data: openSession } = await admin
+    // Look for an existing open OR bill_requested session. Previously this
+    // only matched "open", so a customer who requested the bill and then
+    // placed another order would get a brand-new session — splitting their
+    // table's orders across two sessions and breaking the bill total.
+    const { data: activeSession } = await admin
       .from("table_sessions")
       .select("id")
       .eq("table_id", tableId)
-      .eq("status", "open")
+      .in("status", ["open", "bill_requested"])
       .maybeSingle();
 
-    tableSessionId = openSession?.id ?? null;
+    tableSessionId = activeSession?.id ?? null;
 
     if (!tableSessionId) {
       const { data: newSession } = await admin
@@ -263,7 +267,16 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
   await admin.from("order_status_history").insert({ order_id: order.id, status: "pending" });
 
   if (tableId) {
-    await admin.from("restaurant_tables").update({ status: "order_pending" }).eq("id", tableId);
+    // Only move the table to "order_pending" if it is currently "available".
+    // Previously this was an unconditional update, which would regress a
+    // table from "occupied" or "bill_requested" back to "order_pending",
+    // hiding the fact that guests are already seated or have asked for the
+    // bill.
+    await admin
+      .from("restaurant_tables")
+      .update({ status: "order_pending" })
+      .eq("id", tableId)
+      .eq("status", "available");
   }
 
   if (couponId) {

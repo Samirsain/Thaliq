@@ -9,15 +9,10 @@ import { createClient } from "@/lib/supabase/server";
 export type StaffActionState = { error: string | null };
 
 /**
- * PIN accounts are for floor roles only.
- *
- * "manager" is deliberately absent even though PRD section 7 lists it on the
- * PIN screen: a manager's job (menu, staff, analytics — section 39) lives in
- * the Supabase-Auth dashboard, which a PIN session cannot reach. Offering it
- * here would create accounts that can be made but never signed into. Managers
- * get a real email/password account instead.
+ * Only the unified "staff" role is offered for PIN accounts. Managers need
+ * the full dashboard (Supabase Auth), which a PIN session cannot reach.
  */
-const VALID_ROLES = ["waiter", "kitchen", "cashier"];
+const VALID_ROLES = ["staff"];
 
 export async function addStaff(
   _prevState: StaffActionState,
@@ -31,8 +26,6 @@ export async function addStaff(
   if (!name) return { error: "Name is required." };
   if (!VALID_ROLES.includes(role)) return { error: "Choose a valid role." };
 
-  // Exactly 4 digits: the staff login keypad (PRD section 7's ● ● ● ●) is a
-  // fixed 4-dot pad, so a longer PIN would be impossible to type in.
   if (!/^\d{4}$/.test(pin)) {
     return { error: "PIN must be exactly 4 digits." };
   }
@@ -40,10 +33,6 @@ export async function addStaff(
   const restaurant = await requireCurrentRestaurant();
   const supabase = await createClient();
 
-  // Sign-in matches on restaurant + role + PIN, so two people sharing a PIN
-  // within the same role would be indistinguishable — whoever the query
-  // returned first would get the credit for every order they touch. Reject
-  // the collision at creation rather than mis-attributing work later.
   const { data: sameRole } = await supabase
     .from("staff")
     .select("name, pin_hash")
@@ -54,7 +43,7 @@ export async function addStaff(
   const clash = (sameRole ?? []).find((member) => verifyPin(pin, member.pin_hash));
   if (clash) {
     return {
-      error: `${clash.name} already uses that PIN for the ${role} role. Pick a different PIN.`,
+      error: `${clash.name} already uses that PIN. Pick a different PIN.`,
     };
   }
 
@@ -65,6 +54,140 @@ export async function addStaff(
     role,
     pin_hash: hashPin(pin),
   });
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/dashboard/staff");
+  return { error: null };
+}
+
+/** Edits a staff member's display name. */
+export async function editStaffName(
+  staffId: string,
+  name: string,
+): Promise<StaffActionState> {
+  const trimmed = name.trim();
+  if (!trimmed) return { error: "Name is required." };
+
+  const restaurant = await requireCurrentRestaurant();
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("staff")
+    .update({ name: trimmed })
+    .eq("id", staffId)
+    .eq("restaurant_id", restaurant.restaurantId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/dashboard/staff");
+  return { error: null };
+}
+
+/** Resets a staff member's PIN and invalidates all active sessions. */
+export async function resetStaffPin(
+  staffId: string,
+  newPin: string,
+): Promise<StaffActionState> {
+  if (!/^\d{4}$/.test(newPin)) {
+    return { error: "PIN must be exactly 4 digits." };
+  }
+
+  const restaurant = await requireCurrentRestaurant();
+  const supabase = await createClient();
+
+  const { data: sameRole } = await supabase
+    .from("staff")
+    .select("name, pin_hash")
+    .eq("restaurant_id", restaurant.restaurantId)
+    .eq("role", "staff")
+    .eq("is_active", true)
+    .neq("id", staffId);
+
+  const clash = (sameRole ?? []).find((member) => verifyPin(newPin, member.pin_hash));
+  if (clash) {
+    return { error: `${clash.name} already uses that PIN. Pick a different PIN.` };
+  }
+
+  const { data: current } = await supabase
+    .from("staff")
+    .select("session_version")
+    .eq("id", staffId)
+    .eq("restaurant_id", restaurant.restaurantId)
+    .maybeSingle();
+
+  if (!current) return { error: "Staff member not found." };
+
+  const { error } = await supabase
+    .from("staff")
+    .update({
+      pin_hash: hashPin(newPin),
+      session_version: current.session_version + 1,
+    })
+    .eq("id", staffId)
+    .eq("restaurant_id", restaurant.restaurantId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/dashboard/staff");
+  return { error: null };
+}
+
+/** Activates or deactivates a staff member. Deactivating invalidates sessions. */
+export async function toggleStaffActive(
+  staffId: string,
+  active: boolean,
+): Promise<StaffActionState> {
+  const restaurant = await requireCurrentRestaurant();
+  const supabase = await createClient();
+
+  const update: Record<string, unknown> = { is_active: active };
+
+  if (!active) {
+    const { data: current } = await supabase
+      .from("staff")
+      .select("session_version")
+      .eq("id", staffId)
+      .eq("restaurant_id", restaurant.restaurantId)
+      .maybeSingle();
+
+    if (!current) return { error: "Staff member not found." };
+    update.session_version = current.session_version + 1;
+  }
+
+  const { error } = await supabase
+    .from("staff")
+    .update(update)
+    .eq("id", staffId)
+    .eq("restaurant_id", restaurant.restaurantId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/dashboard/staff");
+  return { error: null };
+}
+
+/** Revokes all active sessions for a staff member by incrementing session_version. */
+export async function revokeStaffSessions(
+  staffId: string,
+): Promise<StaffActionState> {
+  const restaurant = await requireCurrentRestaurant();
+  const supabase = await createClient();
+
+  const { data: current } = await supabase
+    .from("staff")
+    .select("session_version")
+    .eq("id", staffId)
+    .eq("restaurant_id", restaurant.restaurantId)
+    .maybeSingle();
+
+  if (!current) return { error: "Staff member not found." };
+
+  const { error } = await supabase
+    .from("staff")
+    .update({ session_version: current.session_version + 1 })
+    .eq("id", staffId)
+    .eq("restaurant_id", restaurant.restaurantId);
 
   if (error) return { error: error.message };
 

@@ -12,22 +12,10 @@ export function AddStaffForm({ branches }: { branches: { id: string; name: strin
 
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-3">
+      <input type="hidden" name="role" value="staff" />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="staffName">Name</Label>
         <Input id="staffName" name="name" placeholder="Priya" required className="w-40" />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="role">Role</Label>
-        <select
-          id="role"
-          name="role"
-          required
-          className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs"
-        >
-          <option value="waiter">Waiter</option>
-          <option value="kitchen">Kitchen</option>
-          <option value="cashier">Cashier</option>
-        </select>
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="branchId">Branch</Label>

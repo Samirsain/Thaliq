@@ -1,104 +1,129 @@
-import { AutoRefresh } from "@/components/auto-refresh";
-import { ReadyOrderCard } from "@/components/staff/ready-order-card";
-import { WaiterRequestCard } from "@/components/staff/waiter-request-card";
-import { Button } from "@/components/ui/button";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { requireStaffSession } from "@/lib/staff-session";
-import { staffLogout } from "@/app/actions/staff-auth";
+import Link from "next/link";
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentStaffSession } from "@/lib/staff-session";
 
 export default async function WaiterPage() {
-  const session = await requireStaffSession("waiter");
-  const admin = createAdminClient();
+  const session = await getCurrentStaffSession("waiter");
+  const supabase = await createClient();
 
-  let requestQuery = admin
-    .from("waiter_requests")
-    .select("id, type, restaurant_tables(label)")
-    .is("resolved_at", null)
-    .order("created_at");
-
-  let readyQuery = admin
-    .from("orders")
-    .select(
-      "id, order_number, order_items(id, item_name, variant_name, quantity), table_sessions(restaurant_tables(label))",
-    )
-    .eq("restaurant_id", session.restaurantId)
-    .eq("status", "ready")
-    .order("created_at");
+  let branchIds: string[] = [];
 
   if (session.branchId) {
-    requestQuery = requestQuery.eq("branch_id", session.branchId);
-    readyQuery = readyQuery.eq("branch_id", session.branchId);
+    branchIds = [session.branchId];
+  } else {
+    // Owners/managers (branchId = null) see all branches of their restaurant.
+    // Previously this passed an empty array to .in(), which Supabase treats
+    // as "no filter" — leaking every unresolved waiter request across ALL
+    // restaurants on the platform.
+    const { data: branches } = await supabase
+      .from("branches")
+      .select("id")
+      .eq("restaurant_id", session.restaurantId);
+
+    branchIds = (branches ?? []).map((b) => b.id);
   }
 
-  const [{ data: requests }, { data: readyOrders }] = await Promise.all([
-    requestQuery,
-    readyQuery,
-  ]);
+  // Guard: if the restaurant has no branches yet, don't query at all —
+  // .in("branch_id", []) would return no rows, but it's clearer to short
+  // circuit and show the empty state.
+  if (branchIds.length === 0) {
+    return (
+      <div className="flex flex-col gap-6">
+        <h1 className="text-2xl font-semibold">Waiter Console</h1>
+        <Card>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              No branches set up yet. Ask your manager to add a branch first.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const { data: requests } = await supabase
+    .from("waiter_requests")
+    .select("id, table_id, request_type, created_at, resolved_at, restaurant_tables(label)")
+    .in("branch_id", branchIds)
+    .is("resolved_at", null)
+    .order("created_at", { ascending: false });
+
+  const { data: readyOrders } = await supabase
+    .from("orders")
+    .select("id, order_number, table_session_id, table_sessions(table_id, restaurant_tables(label))")
+    .eq("restaurant_id", session.restaurantId)
+    .eq("status", "ready")
+    .order("created_at", { ascending: false });
 
   return (
-    <div className="flex min-h-screen flex-col gap-8 bg-muted/20 p-4 sm:p-6">
-      <AutoRefresh intervalMs={4000} />
-
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Waiter</h1>
-          <p className="text-muted-foreground">{session.name}</p>
-        </div>
-        <form action={staffLogout}>
-          <Button type="submit" variant="outline">
-            Sign out
-          </Button>
-        </form>
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-semibold">Waiter Console</h1>
+        <p className="text-muted-foreground">Welcome, {session.name}.</p>
       </div>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="font-medium">
-          Ready to serve
-          {readyOrders && readyOrders.length > 0 ? ` (${readyOrders.length})` : ""}
-        </h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {(readyOrders ?? []).map((order) => (
-            <ReadyOrderCard
-              key={order.id}
-              order={{
-                id: order.id,
-                order_number: order.order_number,
-                order_items: order.order_items,
-                tableLabel:
-                  (order.table_sessions as unknown as { restaurant_tables: { label: string } } | null)
-                    ?.restaurant_tables.label ?? null,
-              }}
-            />
-          ))}
-          {(!readyOrders || readyOrders.length === 0) && (
-            <p className="text-sm text-muted-foreground">
-              Nothing ready right now. Orders appear here the moment the kitchen marks them ready.
-            </p>
+      <Card>
+        <CardHeader>
+          <CardTitle>Service Requests</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {requests && requests.length > 0 ? (
+            <ul className="divide-y">
+              {requests.map((req) => (
+                <li key={req.id} className="flex items-center justify-between py-3">
+                  <div>
+                    <p className="font-medium">
+                      {(req.restaurant_tables as { label: string } | null)?.label ?? "Unknown table"}
+                    </p>
+                    <p className="text-sm text-muted-foreground capitalize">
+                      {req.request_type} · {new Date(req.created_at).toLocaleTimeString()}
+                    </p>
+                  </div>
+                  <form action={resolveWaiterRequest.bind(null, req.id)}>
+                    <button type="submit" className="text-sm text-primary hover:underline">
+                      Resolve
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">No pending requests.</p>
           )}
-        </div>
-      </section>
+        </CardContent>
+      </Card>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="font-medium">
-          Table requests
-          {requests && requests.length > 0 ? ` (${requests.length})` : ""}
-        </h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {(requests ?? []).map((request) => (
-            <WaiterRequestCard
-              key={request.id}
-              request={{
-                id: request.id,
-                type: request.type,
-                tableLabel: (request.restaurant_tables as unknown as { label: string } | null)?.label ?? "—",
-              }}
-            />
-          ))}
-          {(!requests || requests.length === 0) && (
-            <p className="text-sm text-muted-foreground">No open requests.</p>
+      <Card>
+        <CardHeader>
+          <CardTitle>Ready to Serve</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {readyOrders && readyOrders.length > 0 ? (
+            <ul className="divide-y">
+              {readyOrders.map((order) => (
+                <li key={order.id} className="flex items-center justify-between py-3">
+                  <div>
+                    <p className="font-medium">Order #{order.order_number}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {(order.table_sessions as { restaurant_tables: { label: string } | null } | null)
+                        ?.restaurant_tables?.label ?? "Pickup"}
+                    </p>
+                  </div>
+                  <form action={markOrderServed.bind(null, order.id)}>
+                    <button type="submit" className="text-sm text-primary hover:underline">
+                      Mark served
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">No orders ready to serve.</p>
           )}
-        </div>
-      </section>
+        </CardContent>
+      </Card>
     </div>
   );
 }
